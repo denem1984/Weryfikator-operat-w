@@ -5,6 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weryfikator Operatów Szacunkowych</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // EARLY AUTH BOOTSTRAP — uruchamiany przed głównym kodem aplikacji.
+    // Dzięki temu logowanie nie zależy od poprawnego wykonania pozostałych funkcji.
+    window.WERYFIKATOR_SUPABASE_URL = "https://shzmpvxqlfnwttsuqpwg.supabase.co";
+    window.WERYFIKATOR_SUPABASE_KEY = "sb_publishable_zTGRk4vvX_DyjXGualjV_Q_QTkCyEeQ";
+    window.WERYFIKATOR_LOGIN_SUFFIX = "@weryfikator.operatow";
+    window.WERYFIKATOR_AUTH_BOOT_ERROR = null;
+    try {
+        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+            throw new Error('Biblioteka Supabase JS nie została załadowana.');
+        }
+        window.weryfikatorAuthClient = window.supabase.createClient(
+            window.WERYFIKATOR_SUPABASE_URL,
+            window.WERYFIKATOR_SUPABASE_KEY
+        );
+        window.weryfikatorAuthClient.auth.getSession().then(({data, error}) => {
+            const status = document.getElementById('auth-status');
+            if (error) {
+                if (status) status.textContent = 'Błąd sprawdzania sesji: ' + error.message;
+                return;
+            }
+            if (data?.session) {
+                window.__weryfikatorInitialSession = data.session;
+            } else if (status) {
+                status.textContent = 'Zaloguj się, aby korzystać z aplikacji.';
+            }
+        }).catch(err => {
+            window.WERYFIKATOR_AUTH_BOOT_ERROR = err;
+            const status = document.getElementById('auth-status');
+            if (status) status.textContent = 'Błąd Supabase: ' + (err?.message || err);
+        });
+    } catch (err) {
+        window.WERYFIKATOR_AUTH_BOOT_ERROR = err;
+    }
+</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -49,7 +84,7 @@
                 <p class="text-sm text-slate-400 mt-1">Zaloguj się, aby korzystać z aplikacji</p>
             </div>
 
-            <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); event.stopPropagation(); if (typeof window.handleLoginSubmit === 'function') { window.handleLoginSubmit(event); } return false;">
+            <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); event.stopPropagation(); if (typeof window.handleLoginSubmit === 'function') { window.handleLoginSubmit(event); } else { var e=document.getElementById('login-error'); if(e){e.textContent='Kod logowania nie został uruchomiony.';e.classList.remove('hidden');} var s=document.getElementById('auth-status'); if(s)s.textContent='Błąd inicjalizacji aplikacji.'; } return false;">
                 <div>
                     <label for="login-name" class="block text-xs text-slate-400 mb-1">Login</label>
                     <div class="flex">
@@ -427,14 +462,16 @@
         // Supabase Authentication
         // Inicjalizacja jest zabezpieczona, aby nawet błąd biblioteki/konfiguracji
         // nie powodował natywnego przeładowania formularza logowania.
-        let supabase = null;
-        let supabaseInitError = null;
+        let supabase = window.weryfikatorAuthClient || null;
+        let supabaseInitError = window.WERYFIKATOR_AUTH_BOOT_ERROR || null;
 
         try {
-            if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-                throw new Error('Biblioteka Supabase JS nie została załadowana z CDN.');
+            if (!supabase) {
+                if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+                    throw new Error('Biblioteka Supabase JS nie została załadowana z CDN.');
+                }
+                supabase = window.supabase.createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY);
             }
-            supabase = window.supabase.createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY);
         } catch (err) {
             supabaseInitError = err;
             console.error('Supabase initialization error:', err);
